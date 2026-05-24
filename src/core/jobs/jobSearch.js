@@ -126,6 +126,30 @@ class JobSearch {
     logger.info(`[Jobs] Total: ${todasVagas.length} vagas únicas`);
     return todasVagas;
   }
+  async buscar(termoFiltro = null) {
+  const termos = termoFiltro ? [termoFiltro] : TERMOS;
+  const todasVagas  = [];
+  const linksVistos = new Set();
+
+  for (const termo of termos) {
+    logger.info(`[Jobs] Buscando: "${termo}"`);
+    try {
+      const vagas = await this.buscarTermo(termo);
+      for (const vaga of vagas) {
+        if (!linksVistos.has(vaga.link)) {
+          linksVistos.add(vaga.link);
+          todasVagas.push(vaga);
+        }
+      }
+    } catch (err) {
+      logger.error(`[Jobs] Erro em "${termo}": ${err.message}`);
+    }
+  }
+
+  logger.info(`[Jobs] Total: ${todasVagas.length} vagas únicas`);
+  return todasVagas;
+  }
 }
+
 
 module.exports = JobSearch;
