@@ -27,17 +27,13 @@ class JobSearch {
     });
     await this.page.waitForTimeout(2000);
 
-    // Preenche só "O quê?" — deixa "Onde?" vazio
     await this.page.waitForSelector('.js_input', { timeout: 10000 });
-
     const inputs = await this.page.$$('.js_input');
 
-    // Campo keyword
     await inputs[0].click({ clickCount: 3 });
     await inputs[0].fill(termo);
     await this.page.waitForTimeout(500);
 
-    // Limpa campo de localização
     if (inputs[1]) {
       await inputs[1].click({ clickCount: 3 });
       await inputs[1].fill('');
@@ -45,7 +41,6 @@ class JobSearch {
     }
 
     await inputs[0].press('Enter');
-
     await this.page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
     await this.page.waitForTimeout(2000);
 
@@ -65,9 +60,7 @@ class JobSearch {
       logger.info(`[Jobs] "${termo}" p${pagina}: ${encontradas.length} vagas`);
 
       if (pagina < MAX_PAGINAS) {
-        const proxima = await this.page.$(
-          'a[aria-label*="próxima"], a[rel="next"], .js_next, [class*="next-page"]'
-        );
+        const proxima = await this.page.$('a[aria-label*="próxima"], a[rel="next"], .js_next, [class*="next-page"]');
         if (!proxima) break;
         await proxima.click();
         await this.page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
@@ -80,27 +73,29 @@ class JobSearch {
 
   async extrairVagas() {
     return await this.page.evaluate(() => {
-      const cards    = document.querySelectorAll('.js_rowCard');
+      const cards    = document.querySelectorAll('.js_rowCard[data-href]');
       const resultado = [];
 
       cards.forEach(card => {
-        const tituloEl  = card.querySelector('h2, h3, [class*="title"], strong');
+        const tituloEl  = card.querySelector('.js_vacancyTitle, h2, h3');
         const titulo    = tituloEl?.innerText?.trim() || '';
 
-        const empresaEl = card.querySelector('[class*="company"], [class*="employer"]');
-        const empresa   = empresaEl?.innerText?.trim() || '';
+        const links    = card.querySelectorAll('a');
+        const empresa  = links[1]?.innerText?.trim() || '';
 
-        const localEl   = card.querySelector('[class*="location"], [class*="city"]');
-        const local     = localEl?.innerText?.trim() || '';
+        const localEl  = card.querySelector('[class*="location"], [class*="city"], .js_location');
+        const local    = localEl?.innerText?.trim() || '';
 
-        const linkEl    = card.querySelector('a[href*="/emprego/"], a[href*="infojobs.com.br"]');
-        const link      = linkEl?.href || '';
+        const dataHref = card.getAttribute('data-href') || '';
+        const link     = dataHref
+          ? `https://www.infojobs.com.br${dataHref}`
+          : (links[0]?.href || '');
 
         const texto      = card.innerText?.toLowerCase() || '';
         const remoto     = texto.includes('home') || texto.includes('remoto') || texto.includes('híbrido');
         const modalidade = remoto ? 'remoto' : 'presencial';
 
-        if (titulo) {
+        if (titulo && link) {
           resultado.push({ titulo, empresa, local, link, modalidade });
         }
       });

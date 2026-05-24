@@ -6,9 +6,10 @@ const logger         = require('./utils/logger');
 const BrowserManager = require('./core/browser/browser');
 const AuthManager    = require('./core/auth/auth');
 const JobSearch      = require('./core/jobs/jobSearch');
+const JobParser      = require('./core/jobs/jobParser');
 
 (async () => {
-  logger.info('=== InfoJobs Bot | Parte 3 — Busca de Vagas ===');
+  logger.info('=== InfoJobs Bot | Parte 4 — Parser de Vaga ===');
 
   const browser = new BrowserManager();
 
@@ -22,11 +23,21 @@ const JobSearch      = require('./core/jobs/jobSearch');
     const jobs  = new JobSearch(page);
     const vagas = await jobs.buscar();
 
-    logger.info('\n=== RESUMO ===');
-    vagas.slice(0, 10).forEach((v, i) => {
-      logger.info(`[${i + 1}] ${v.titulo} | ${v.empresa} | ${v.local} | ${v.modalidade}`);
+    const parser   = new JobParser(page);
+    const detalhes = await parser.parsearLote(vagas, 14);
+
+    logger.info('\n=== DETALHES DAS VAGAS ===');
+    detalhes.forEach((v, i) => {
+      logger.info(`[${i + 1}] ${v.titulo}`);
+      logger.info(`    Empresa:    ${v.empresa}`);
+      logger.info(`    Local:      ${v.local}`);
+      logger.info(`    Modalidade: ${v.modalidade}`);
+      logger.info(`    Salário:    ${v.salario}`);
+      logger.info(`    Exp:        ${v.experiencia}`);
+      logger.info(`    Skills:     ${v.skills?.join(', ')}`);
+      logger.info(`    URL:        ${v.url}`);
+      logger.info('    ---');
     });
-    logger.info(`Total encontrado: ${vagas.length}`);
 
   } catch (err) {
     logger.error(`[FALHA] ${err.message}`);
