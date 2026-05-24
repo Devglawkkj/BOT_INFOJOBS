@@ -9,36 +9,29 @@ const AuthManager     = require('./core/auth/auth');
 const JobSearch       = require('./core/jobs/jobSearch');
 const JobParser       = require('./core/jobs/jobParser');
 const CurriculoParser = require('./core/matcher/curriculoParser');
+const Matcher         = require('./core/matcher/matcher');
 
 (async () => {
-  logger.info('=== InfoJobs Bot | Parte 5 — Parser Currículo ===');
+  logger.info('=== InfoJobs Bot | Parte 6 — Matcher ===');
 
-  // Pergunta interativa ou argumento direto
-  let TERMO_MANUAL   = process.argv[2] || null;
+  let TERMO_MANUAL    = process.argv[2] || null;
   let VAGAS_POR_TERMO = parseInt(process.argv[3]) || null;
 
   if (!TERMO_MANUAL) {
     TERMO_MANUAL = readline.question('\nQual cargo deseja buscar? (ex: suporte tecnico): ').trim();
   }
-
   if (!VAGAS_POR_TERMO) {
     VAGAS_POR_TERMO = parseInt(readline.question('Quantas vagas por termo? (ex: 5): ').trim()) || 5;
   }
 
-  logger.info(`[Config] Cargo: "${TERMO_MANUAL}" | Vagas por termo: ${VAGAS_POR_TERMO}`);
+  logger.info(`[Config] Cargo: "${TERMO_MANUAL}" | Vagas: ${VAGAS_POR_TERMO}`);
 
   const browser = new BrowserManager();
 
   try {
-    // Parser do currículo
     const curriculoParser = new CurriculoParser();
     const perfil          = await curriculoParser.parse();
-
-    logger.info('\n=== PERFIL EXTRAÍDO ===');
-    logger.info(`Nome:   ${perfil.nome}`);
-    logger.info(`Local:  ${perfil.local}`);
-    logger.info(`Exp:    ${perfil.exp_anos} ano(s)`);
-    logger.info(`Skills: ${perfil.skills.join(', ')}`);
+    logger.info(`[Curriculo] Skills: ${perfil.skills.join(', ')}`);
 
     await browser.start();
     const page = await browser.newPage();
@@ -46,11 +39,9 @@ const CurriculoParser = require('./core/matcher/curriculoParser');
     const auth = new AuthManager(page);
     await auth.ensure();
 
-    // Busca vagas
     const jobs  = new JobSearch(page);
     const vagas = await jobs.buscar(TERMO_MANUAL);
 
-    // N vagas por termo escolhido pelo usuário
     const vagasPorTermo = {};
     for (const vaga of vagas) {
       if (!vagasPorTermo[vaga.termo]) vagasPorTermo[vaga.termo] = [];
@@ -61,16 +52,26 @@ const CurriculoParser = require('./core/matcher/curriculoParser');
     const amostra = Object.values(vagasPorTermo).flat();
     logger.info(`\n[OK] Amostra: ${amostra.length} vagas (${VAGAS_POR_TERMO} por termo)`);
 
-    // Parseia as vagas
     const parser   = new JobParser(page);
     const detalhes = await parser.parsearLote(amostra, amostra.length);
 
-    logger.info('\n=== RESUMO ===');
-    detalhes.forEach((v, i) => {
-      logger.info(`[${i + 1}] ${v.titulo} | ${v.modalidade} | skills: ${v.skills?.join(', ')}`);
+    const matcher                        = new Matcher(perfil);
+    const { aprovadas, reprovadas, todas } = matcher.processar(detalhes);
+
+    logger.info('\n=== VAGAS APROVADAS ===');
+    aprovadas.forEach((v, i) => {
+      logger.info(`[${i + 1}] ${v.titulo}`);
+      logger.info(`    Score:    ${v.match.score}/100`);
+      logger.info(`    Detalhes: skills:${v.match.detalhes.scoreSkills} cargo:${v.match.detalhes.scoreCargo} exp:${v.match.detalhes.scoreExp} local:${v.match.detalhes.scoreLocal}`);
+      logger.info(`    Skills:   ${v.match.matchedSkills.join(', ')}`);
+      logger.info(`    URL:      ${v.url}`);
+      logger.info('    ---');
     });
 
-    logger.info(`\n[OK] ${detalhes.length} vagas parseadas — pronto para Parte 6`);
+    logger.info('\n=== RESUMO ===');
+    logger.info(`Total parseadas: ${todas.length}`);
+    logger.info(`Aprovadas (≥70): ${aprovadas.length}`);
+    logger.info(`Reprovadas:      ${reprovadas.length}`);
 
   } catch (err) {
     logger.error(`[FALHA] ${err.message}`);

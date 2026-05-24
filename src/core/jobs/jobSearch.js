@@ -18,6 +18,35 @@ class JobSearch {
     this.page = page;
   }
 
+  async aplicarFiltroHomeOffice() {
+    try {
+      // Clica em "Modelo de Trabalho" para expandir
+      const chips = await this.page.$$('.js_chipText');
+      for (const chip of chips) {
+        const texto = await chip.innerText();
+        if (texto.includes('Modelo de Trabalho')) {
+          await chip.click();
+          await this.page.waitForTimeout(1500);
+          logger.debug('[Jobs] Filtro "Modelo de Trabalho" expandido');
+          break;
+        }
+      }
+
+      // Clica em "Home office"
+      const homeOfficeLink = await this.page.$('a.text-decoration-none:has-text("Home office")');
+      if (homeOfficeLink) {
+        await homeOfficeLink.click();
+        await this.page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+        await this.page.waitForTimeout(2000);
+        logger.info('[Jobs] Filtro Home Office aplicado');
+      } else {
+        logger.warn('[Jobs] Link "Home office" não encontrado — buscando sem filtro');
+      }
+    } catch (err) {
+      logger.warn(`[Jobs] Erro ao aplicar filtro: ${err.message}`);
+    }
+  }
+
   async buscarTermo(termo) {
     const vagas = [];
 
@@ -45,6 +74,9 @@ class JobSearch {
     await this.page.waitForTimeout(2000);
 
     logger.debug(`[Jobs] URL após busca: ${this.page.url()}`);
+
+    // Aplica filtro Home Office
+    await this.aplicarFiltroHomeOffice();
 
     for (let pagina = 1; pagina <= MAX_PAGINAS; pagina++) {
       logger.debug(`[Jobs] "${termo}" — página ${pagina}`);
@@ -104,11 +136,12 @@ class JobSearch {
     });
   }
 
-  async buscar() {
+  async buscar(termoFiltro = null) {
+    const termos      = termoFiltro ? [termoFiltro] : TERMOS;
     const todasVagas  = [];
     const linksVistos = new Set();
 
-    for (const termo of TERMOS) {
+    for (const termo of termos) {
       logger.info(`[Jobs] Buscando: "${termo}"`);
       try {
         const vagas = await this.buscarTermo(termo);
@@ -126,30 +159,6 @@ class JobSearch {
     logger.info(`[Jobs] Total: ${todasVagas.length} vagas únicas`);
     return todasVagas;
   }
-  async buscar(termoFiltro = null) {
-  const termos = termoFiltro ? [termoFiltro] : TERMOS;
-  const todasVagas  = [];
-  const linksVistos = new Set();
-
-  for (const termo of termos) {
-    logger.info(`[Jobs] Buscando: "${termo}"`);
-    try {
-      const vagas = await this.buscarTermo(termo);
-      for (const vaga of vagas) {
-        if (!linksVistos.has(vaga.link)) {
-          linksVistos.add(vaga.link);
-          todasVagas.push(vaga);
-        }
-      }
-    } catch (err) {
-      logger.error(`[Jobs] Erro em "${termo}": ${err.message}`);
-    }
-  }
-
-  logger.info(`[Jobs] Total: ${todasVagas.length} vagas únicas`);
-  return todasVagas;
-  }
 }
-
 
 module.exports = JobSearch;
